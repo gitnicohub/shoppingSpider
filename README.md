@@ -71,11 +71,22 @@ Google cambia la struttura della pagina periodicamente. Per verificarli/aggiorna
 4. Aggiorna i selettori se necessario, poi esegui `pytest tests/test_google_shopping.py -v`:
    il test `test_parse_listings_against_real_fixture` dovrebbe passare.
 
+**Nota (gap noto):** l'adapter attuale lancia Chromium headless "nudo", con la sola
+rotazione dello user-agent, senza alcun patching anti-fingerprint (stealth). L'anti-bot
+di Google è aggressivo e con ogni probabilità rileverà/bloccherà un Chromium headless
+non patchato al primo uso reale (risultati vuoti, consent wall, o CAPTCHA). Prima di
+affidarsi a questo adapter in produzione, è fortemente consigliato aggiungere una
+libreria di stealth (es. `playwright-stealth`) come attività dedicata separata — non è
+stata aggiunta in questa passata di fix perché le librerie di stealth sono sensibili
+alla versione e meritano una scelta/validazione deliberata, non una dipendenza aggiunta
+di corsa.
+
 ## Aggiungere un nuovo adapter/marketplace
 
 1. Crea `scrapers/plugins/<nome>.py` con una classe che estende
    `scrapers.base.BaseScraper` e implementa `async def search(self, target) -> list[ListingResult]`.
-2. Registra la classe in `SCRAPER_REGISTRY` in `core/engine.py`.
+2. Registra la classe in `SCRAPER_REGISTRY` in `scrapers/plugins/__init__.py` (nessuna
+   modifica a `core/` è necessaria).
 3. Usa `"adapter": "<nome>"` nei target di `config/targets.json`.
 4. Aggiungi test di parsing con fixture HTML statiche, seguendo lo schema di
    `tests/test_google_shopping.py`.
