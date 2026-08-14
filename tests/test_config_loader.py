@@ -58,3 +58,44 @@ def test_load_config_empty_targets_raises(tmp_path, monkeypatch):
 
     with pytest.raises(ConfigError, match="at least one target"):
         load_config(config_path, targets_path)
+
+
+def test_validation_error_does_not_leak_bot_token(tmp_path, monkeypatch):
+    # bot_token is present and valid, but chat_id is missing entirely, so
+    # AppConfig validation fails. Pydantic's default ValidationError.__str__
+    # would embed the whole input dict (including bot_token) in the message;
+    # we assert the raised ConfigError does NOT contain the secret value.
+    monkeypatch.setenv("TEST_BOT_TOKEN", "123456:SUPER-SECRET-TOKEN-VALUE")
+    config_text = """
+telegram:
+  bot_token: "${TEST_BOT_TOKEN}"
+polling:
+  min_interval_seconds: 60
+  max_interval_seconds: 120
+"""
+    config_path, targets_path = _write_files(tmp_path, config_text=config_text)
+
+    with pytest.raises(ConfigError) as exc_info:
+        load_config(config_path, targets_path)
+
+    assert "SUPER-SECRET-TOKEN-VALUE" not in str(exc_info.value)
+
+
+def test_load_config_malformed_yaml_raises_config_error(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEST_BOT_TOKEN", "123:abc")
+    monkeypatch.setenv("TEST_CHAT_ID", "999")
+    malformed_yaml = "telegram:\n  bot_token: x\n foo: [1, 2\n"
+    config_path, targets_path = _write_files(tmp_path, config_text=malformed_yaml)
+
+    with pytest.raises(ConfigError):
+        load_config(config_path, targets_path)
+
+
+def test_load_config_non_mapping_yaml_raises_config_error(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEST_BOT_TOKEN", "123:abc")
+    monkeypatch.setenv("TEST_CHAT_ID", "999")
+    non_mapping_yaml = "- a\n- b\n"
+    config_path, targets_path = _write_files(tmp_path, config_text=non_mapping_yaml)
+
+    with pytest.raises(ConfigError):
+        load_config(config_path, targets_path)

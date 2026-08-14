@@ -81,6 +81,20 @@ def _expand_env_vars(raw_text: str) -> str:
     return _ENV_VAR_PATTERN.sub(replace, raw_text)
 
 
+def _format_validation_error(e: ValidationError) -> str:
+    """Format a pydantic ValidationError without echoing the (possibly secret-bearing) input.
+
+    ValidationError's default __str__ embeds the full input value that failed
+    validation, which can leak secrets (e.g. a valid bot_token alongside an
+    invalid chat_id). We build the message from loc/msg only.
+    """
+    parts = []
+    for err in e.errors(include_url=False):
+        loc = ".".join(str(p) for p in err["loc"])
+        parts.append(f"{loc}: {err['msg']}" if loc else err["msg"])
+    return "; ".join(parts)
+
+
 def load_config(config_path: Path, targets_path: Path) -> tuple[AppConfig, list[Target]]:
     if not config_path.exists():
         raise ConfigError(f"Config file not found: {config_path}")
@@ -92,12 +106,16 @@ def load_config(config_path: Path, targets_path: Path) -> tuple[AppConfig, list[
         config_dict = yaml.safe_load(raw_yaml) or {}
         app_config = AppConfig(**config_dict)
     except ValidationError as e:
+        raise ConfigError(f"Invalid config.yaml: {_format_validation_error(e)}") from e
+    except (yaml.YAMLError, TypeError) as e:
         raise ConfigError(f"Invalid config.yaml: {e}") from e
 
     try:
         targets_data = json.loads(targets_path.read_text(encoding="utf-8"))
         targets = [Target(**t) for t in targets_data]
-    except (ValidationError, json.JSONDecodeError) as e:
+    except ValidationError as e:
+        raise ConfigError(f"Invalid targets.json: {_format_validation_error(e)}") from e
+    except json.JSONDecodeError as e:
         raise ConfigError(f"Invalid targets.json: {e}") from e
 
     if not targets:
