@@ -1,0 +1,19 @@
+telegram:
+  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  chat_id: "${TELEGRAM_CHAT_ID}"
+
+polling:
+  min_interval_seconds: 1800
+  max_interval_seconds: 3600
+  jitter_between_targets_seconds: [5, 20]
+
+antibot:
+  proxies: []
+  max_retries: 3
+  backoff_base_seconds: 5
+
+database:
+  path: "data/crawler.db"
+
+concurrency: 1
+default_renotify_drop_pct: 0.05
