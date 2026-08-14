@@ -25,11 +25,12 @@ def format_message(listing: Listing, action: NotificationAction, target: Target)
     if reference_price is not None:
         price_line += f" ({reference_label}: {reference_price:.2f} €)"
 
+    platform = listing.seller or listing.adapter
     return (
         f"{header}\n"
         f"📦 *Prodotto:* {listing.title}\n"
         f"{price_line}\n"
-        f"🏪 *Piattaforma:* {listing.adapter}\n"
+        f"🏪 *Piattaforma:* {platform}\n"
         f"🔗 [Vai all'offerta]({listing.url})"
     )
 

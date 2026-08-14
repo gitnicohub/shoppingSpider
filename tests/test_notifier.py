@@ -33,6 +33,7 @@ def test_format_message_new_offer_includes_target_price():
     assert "75.00" in message
     assert "Cuffie Bluetooth XYZ" in message
     assert "https://example.com/item" in message
+    assert "StoreA" in message
 
 
 def test_format_message_price_drop_includes_previous_notified_price():
@@ -41,6 +42,7 @@ def test_format_message_price_drop_includes_previous_notified_price():
     assert "PREZZO SCESO" in message
     assert "44.99" in message
     assert "49.99" in message
+    assert "StoreA" in message
 
 
 async def test_send_notification_success():
@@ -56,3 +58,10 @@ async def test_send_notification_retries_then_gives_up():
     result = await send_notification(bot, chat_id="123", message="hello", max_retries=2)
     assert result is False
     assert bot.send_message.await_count == 3
+
+
+def test_format_message_falls_back_to_adapter_when_seller_is_none():
+    listing = _listing(seller=None)
+    message = format_message(listing, NotificationAction.NEW, _target())
+    assert "google_shopping" in message
+    assert "Piattaforma" in message
