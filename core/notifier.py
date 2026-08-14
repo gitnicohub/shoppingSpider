@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import logging
 
 from telegram import Bot
@@ -13,25 +14,27 @@ logger = logging.getLogger(__name__)
 
 def format_message(listing: Listing, action: NotificationAction, target: Target) -> str:
     if action == NotificationAction.NEW:
-        header = "🔥 *NUOVA OFFERTA RILEVATA!*"
+        header = "🔥 <b>NUOVA OFFERTA RILEVATA!</b>"
         reference_price = target.max_price
         reference_label = "Prezzo target"
     else:
-        header = "📉 *PREZZO SCESO ULTERIORMENTE!*"
+        header = "📉 <b>PREZZO SCESO ULTERIORMENTE!</b>"
         reference_price = listing.last_notified_price
         reference_label = "Prezzo precedente"
 
-    price_line = f"💰 *Prezzo:* {listing.last_price:.2f} €"
+    price_line = f"💰 <b>Prezzo:</b> {listing.last_price:.2f} €"
     if reference_price is not None:
         price_line += f" ({reference_label}: {reference_price:.2f} €)"
 
-    platform = listing.seller or listing.adapter
+    platform = html.escape(listing.seller or listing.adapter)
+    title = html.escape(listing.title)
+    url = html.escape(listing.url)
     return (
         f"{header}\n"
-        f"📦 *Prodotto:* {listing.title}\n"
+        f"📦 <b>Prodotto:</b> {title}\n"
         f"{price_line}\n"
-        f"🏪 *Piattaforma:* {platform}\n"
-        f"🔗 [Vai all'offerta]({listing.url})"
+        f"🏪 <b>Piattaforma:</b> {platform}\n"
+        f'🔗 <a href="{url}">Vai all\'offerta</a>'
     )
 
 
@@ -39,7 +42,7 @@ async def send_notification(bot: Bot, chat_id: str, message: str, max_retries: i
     attempt = 0
     while attempt <= max_retries:
         try:
-            await bot.send_message(chat_id=chat_id, text=message, parse_mode="Markdown")
+            await bot.send_message(chat_id=chat_id, text=message, parse_mode="HTML")
             return True
         except TelegramError as e:
             attempt += 1

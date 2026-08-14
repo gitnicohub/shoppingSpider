@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
+import pytest
 from telegram.error import TelegramError
 
 from core.config_loader import Target
@@ -65,3 +66,31 @@ def test_format_message_falls_back_to_adapter_when_seller_is_none():
     message = format_message(listing, NotificationAction.NEW, _target())
     assert "google_shopping" in message
     assert "Piattaforma" in message
+
+
+def test_format_message_escapes_hostile_title_and_url():
+    listing = _listing(
+        title="Sony WH-1000XM4 *PROMO* _Nuovo_ [2024]",
+        url="https://ex.com/p?a=1&b=(2)",
+    )
+    message = format_message(listing, NotificationAction.NEW, _target())
+
+    # Raw hostile characters must not appear unescaped in the URL/href.
+    assert "a=1&b=(2)" not in message
+    assert "a=1&amp;b=(2)" in message
+
+    # Title with Markdown-special characters must be preserved verbatim as text
+    # (HTML has no need to escape *, _, [, ] - only &, <, >, " need escaping).
+    assert "Sony WH-1000XM4 *PROMO* _Nuovo_ [2024]" in message
+
+    # Structure must use HTML tags, not Markdown syntax.
+    assert "<b>" in message
+    assert '<a href="https://ex.com/p?a=1&amp;b=(2)">' in message
+
+
+async def test_send_notification_non_telegram_error_propagates():
+    bot = AsyncMock()
+    bot.send_message.side_effect = ValueError("unexpected failure")
+
+    with pytest.raises(ValueError):
+        await send_notification(bot, chat_id="123", message="hello")
