@@ -96,6 +96,10 @@ def process_listing(
 
     if listing.last_notified_price is None:
         action = NotificationAction.NEW
+    elif listing.last_notified_price <= 0:
+        # Percentage drop is undefined when notified at zero or negative price.
+        # Treat as no re-notification opportunity (e.g., free/giveaway items).
+        action = NotificationAction.NONE
     else:
         drop_pct = (listing.last_notified_price - result.price) / listing.last_notified_price
         action = NotificationAction.PRICE_DROP if drop_pct >= renotify_drop_pct else NotificationAction.NONE

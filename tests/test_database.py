@@ -62,3 +62,37 @@ def test_different_targets_are_independent(session_factory):
         action_b, _ = process_listing(session, "targetB", "mock", _result(key="same-key"), renotify_drop_pct=0.05)
         assert action_a == NotificationAction.NEW
         assert action_b == NotificationAction.NEW
+
+
+def test_crash_recovery_without_notification(session_factory):
+    """
+    Crash-recovery edge case: listing exists but was never notified.
+    Simulates process crash between process_listing() and mark_notified().
+    Next sighting must still return NEW, not NONE forever.
+    """
+    with session_factory() as session:
+        action1, listing1 = process_listing(session, "target1", "mock", _result(price=100.0), renotify_drop_pct=0.05)
+        assert action1 == NotificationAction.NEW
+        # Deliberately do NOT call mark_notified() — simulating crash
+
+        # Next sighting with same product
+        action2, listing2 = process_listing(session, "target1", "mock", _result(price=100.0), renotify_drop_pct=0.05)
+        # Since last_notified_price is still None, should still be NEW
+        assert action2 == NotificationAction.NEW
+        assert listing2.last_notified_price is None
+
+
+def test_zero_price_notified_does_not_crash(session_factory):
+    """
+    Division-by-zero edge case: listing notified at price 0.0 (e.g., free/giveaway).
+    Next sighting must not raise ZeroDivisionError and should return NONE.
+    """
+    with session_factory() as session:
+        _, listing = process_listing(session, "target1", "mock", _result(price=0.0), renotify_drop_pct=0.05)
+        mark_notified(session, listing, 0.0)
+        assert listing.last_notified_price == 0.0
+
+        # Next sighting with positive price — must not crash
+        action, _ = process_listing(session, "target1", "mock", _result(price=10.0), renotify_drop_pct=0.05)
+        # With last_notified_price=0, percentage drop is undefined, so return NONE
+        assert action == NotificationAction.NONE
