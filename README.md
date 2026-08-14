@@ -42,6 +42,11 @@ prezzo significativi, senza mai duplicare notifiche per lo stesso prezzo.
   python main.py
   ```
 
+**Flag opzionali:** usa `--config` e `--targets` per specificare percorsi alternativi ai file di configurazione (default: `config/config.yaml` e `config/targets.json`):
+```bash
+python main.py --once --dry-run --config custom/config.yaml --targets custom/targets.json
+```
+
 ## Test
 
 ```bash
