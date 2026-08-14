@@ -7,16 +7,9 @@ from core.config_loader import AppConfig, Target
 from core.database import NotificationAction, mark_notified, process_listing
 from core.filters import passes_filters
 from core.notifier import format_message, send_notification
-from scrapers.base import BaseScraper
-from scrapers.plugins.google_shopping import GoogleShoppingScraper
-from scrapers.plugins.mock_adapter import MockScraper
+from scrapers.plugins import SCRAPER_REGISTRY
 
 logger = logging.getLogger(__name__)
-
-SCRAPER_REGISTRY: dict[str, type[BaseScraper]] = {
-    "google_shopping": GoogleShoppingScraper,
-    "mock": MockScraper,
-}
 
 
 async def run_cycle(session_factory, config: AppConfig, targets: list[Target], bot, dry_run: bool = False) -> None:
@@ -38,34 +31,43 @@ async def run_cycle(session_factory, config: AppConfig, targets: list[Target], b
             logger.warning("Target '%s' failed after retries, skipping this cycle: %s", target.id, e)
             continue
 
-        with session_factory() as session:
-            for result in results:
-                if not passes_filters(result, target):
-                    continue
+        try:
+            with session_factory() as session:
+                for result in results:
+                    if not passes_filters(result, target):
+                        continue
 
-                renotify_drop_pct = (
-                    target.renotify_drop_pct
-                    if target.renotify_drop_pct is not None
-                    else config.default_renotify_drop_pct
-                )
-                action, listing = process_listing(session, target.id, target.adapter, result, renotify_drop_pct)
+                    renotify_drop_pct = (
+                        target.renotify_drop_pct
+                        if target.renotify_drop_pct is not None
+                        else config.default_renotify_drop_pct
+                    )
+                    action, listing = process_listing(session, target.id, target.adapter, result, renotify_drop_pct)
 
-                if action == NotificationAction.NONE:
-                    continue
+                    if action == NotificationAction.NONE:
+                        continue
 
-                message = format_message(listing, action, target)
-                if dry_run:
-                    logger.info("[DRY RUN] Would send notification:\n%s", message)
+                    message = format_message(listing, action, target)
+                    if dry_run:
+                        logger.info("[DRY RUN] Would send notification:\n%s", message)
+                        mark_notified(session, listing, listing.last_price)
+                        continue
+
+                    await send_notification(bot, config.telegram.chat_id, message)
                     mark_notified(session, listing, listing.last_price)
-                    continue
-
-                await send_notification(bot, config.telegram.chat_id, message)
-                mark_notified(session, listing, listing.last_price)
+        except Exception:
+            logger.error(
+                "Unexpected error while processing target '%s', skipping", target.id, exc_info=True
+            )
+            continue
 
         await jittered_sleep(*config.polling.jitter_between_targets_seconds)
 
 
 async def run_forever(session_factory, config: AppConfig, targets: list[Target], bot, dry_run: bool = False) -> None:
     while True:
-        await run_cycle(session_factory, config, targets, bot, dry_run=dry_run)
+        try:
+            await run_cycle(session_factory, config, targets, bot, dry_run=dry_run)
+        except Exception:
+            logger.error("Unexpected error during crawl cycle, continuing to next cycle", exc_info=True)
         await jittered_sleep(config.polling.min_interval_seconds, config.polling.max_interval_seconds)
