@@ -1,0 +1,11 @@
+[
+  {
+    "id": "esempio-cuffie",
+    "adapter": "google_shopping",
+    "query": "cuffie bluetooth noise cancelling",
+    "max_price": 80.0,
+    "keywords_include": ["bluetooth"],
+    "keywords_exclude": ["ricondizionato"],
+    "renotify_drop_pct": 0.05
+  }
+]
